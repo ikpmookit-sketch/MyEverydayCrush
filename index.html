@@ -61,6 +61,10 @@
             z-index: 2;
             transform-style: preserve-3d;
             transition: transform 0.5s;
+            min-height: 350px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
         
         .envelope:hover {
@@ -108,11 +112,17 @@
             text-decoration: underline;
         }
         
+        .buttons-container {
+            position: relative;
+            width: 100%;
+            height: 120px;
+            margin-top: 20px;
+        }
+        
         .buttons {
             display: flex;
             justify-content: center;
             gap: 30px;
-            margin-top: 20px;
             position: relative;
             z-index: 10;
         }
@@ -126,11 +136,13 @@
             font-weight: 600;
             transition: all 0.3s ease;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            position: relative;
         }
         
         .yes-btn {
             background-color: #4CAF50;
             color: white;
+            z-index: 11;
         }
         
         .yes-btn:hover {
@@ -141,7 +153,8 @@
         .no-btn {
             background-color: #f44336;
             color: white;
-            position: relative;
+            position: absolute;
+            z-index: 10;
         }
         
         .no-btn:hover {
@@ -201,12 +214,19 @@
             100% { transform: translateY(-100px) scale(1.5); opacity: 0; }
         }
         
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
         @media (max-width: 600px) {
             h1 { font-size: 2rem; }
             .question { font-size: 1.8rem; }
             .envelope-container { width: 95%; }
             .buttons { flex-direction: column; align-items: center; gap: 20px; }
             .btn { width: 200px; }
+            .buttons-container { height: 220px; }
         }
     </style>
 </head>
@@ -219,9 +239,11 @@
     <div class="envelope-container">
         <div class="envelope">
             <div class="question">Asa, will you be my Valentine?</div>
-            <div class="buttons">
-                <button class="btn yes-btn" id="yesBtn">Yes!</button>
-                <button class="btn no-btn" id="noBtn">No</button>
+            <div class="buttons-container">
+                <div class="buttons">
+                    <button class="btn yes-btn" id="yesBtn">Yes!</button>
+                    <button class="btn no-btn" id="noBtn">No</button>
+                </div>
             </div>
         </div>
     </div>
@@ -240,9 +262,84 @@
             const response = document.getElementById('response');
             const envelope = document.querySelector('.envelope');
             const body = document.body;
+            const buttonsContainer = document.querySelector('.buttons-container');
+            
+            // Get button dimensions
+            const yesBtnRect = yesBtn.getBoundingClientRect();
+            const noBtnRect = noBtn.getBoundingClientRect();
+            const buttonWidth = noBtnRect.width;
+            const buttonHeight = noBtnRect.height;
             
             // Track how many times the No button has been hovered/clicked
             let noHoverCount = 0;
+            
+            // Store the current position of the No button
+            let currentNoBtnPosition = { x: 0, y: 0 };
+            
+            // Function to check if two elements overlap
+            function elementsOverlap(element1, element2) {
+                const rect1 = element1.getBoundingClientRect();
+                const rect2 = element2.getBoundingClientRect();
+                
+                return !(
+                    rect1.right < rect2.left || 
+                    rect1.left > rect2.right || 
+                    rect1.bottom < rect2.top || 
+                    rect1.top > rect2.bottom
+                );
+            }
+            
+            // Function to find a non-overlapping position for the No button
+            function findNonOverlappingPosition() {
+                const containerRect = buttonsContainer.getBoundingClientRect();
+                const yesRect = yesBtn.getBoundingClientRect();
+                
+                // Define safe zones (areas where No button won't overlap with Yes button)
+                // We'll try multiple positions until we find one that doesn't overlap
+                const maxAttempts = 50;
+                let attempts = 0;
+                
+                while (attempts < maxAttempts) {
+                    // Generate a random position within the container
+                    const randomX = Math.random() * (containerRect.width - buttonWidth);
+                    const randomY = Math.random() * (containerRect.height - buttonHeight);
+                    
+                    // Temporarily position the No button
+                    noBtn.style.left = `${randomX}px`;
+                    noBtn.style.top = `${randomY}px`;
+                    
+                    // Check if it overlaps with Yes button
+                    if (!elementsOverlap(noBtn, yesBtn)) {
+                        // Also ensure it's not too close to the Yes button
+                        const noRect = noBtn.getBoundingClientRect();
+                        const distanceX = Math.abs(noRect.left - yesRect.left);
+                        const distanceY = Math.abs(noRect.top - yesRect.top);
+                        
+                        // Minimum distance between buttons (at least 20px)
+                        if (distanceX > 20 || distanceY > 20) {
+                            currentNoBtnPosition = { x: randomX, y: randomY };
+                            return { x: randomX, y: randomY };
+                        }
+                    }
+                    
+                    attempts++;
+                }
+                
+                // If we couldn't find a non-overlapping position after max attempts,
+                // place it at the opposite side of the container
+                const fallbackX = yesRect.left < containerRect.width / 2 ? 
+                    containerRect.width - buttonWidth - 20 : 20;
+                const fallbackY = yesRect.top < containerRect.height / 2 ? 
+                    containerRect.height - buttonHeight - 20 : 20;
+                
+                currentNoBtnPosition = { x: fallbackX, y: fallbackY };
+                return { x: fallbackX, y: fallbackY };
+            }
+            
+            // Initialize No button position
+            const initialPosition = findNonOverlappingPosition();
+            noBtn.style.left = `${initialPosition.x}px`;
+            noBtn.style.top = `${initialPosition.y}px`;
             
             // When Yes is clicked
             yesBtn.addEventListener('click', function() {
@@ -256,62 +353,37 @@
                 body.style.background = "linear-gradient(135deg, #ffafbd, #ffc3a0, #a1ffce, #faffd1)";
                 
                 // Make envelope pulse with happiness
-                envelope.style.animation = "pulse 1s infinite alternate";
+                envelope.style.animation = "pulse 1s infinite";
+                
+                // Disable the No button
+                noBtn.disabled = true;
+                noBtn.style.opacity = "0.5";
+                noBtn.style.cursor = "not-allowed";
             });
             
-            // When No is clicked or hovered
+            // When No is hovered
             noBtn.addEventListener('mouseenter', function(e) {
+                if (noBtn.disabled) return;
+                
                 noHoverCount++;
                 
-                // Calculate a new random position for the button
-                const container = document.querySelector('.envelope-container');
-                const containerRect = container.getBoundingClientRect();
-                const buttonRect = noBtn.getBoundingClientRect();
-                
-                // The more attempts, the more extreme the movement
-                const movementFactor = Math.min(noHoverCount * 20, 150);
-                
-                // Generate random positions within envelope bounds
-                const maxX = containerRect.width - buttonRect.width - 40;
-                const maxY = containerRect.height - buttonRect.height - 40;
-                
-                let randomX, randomY;
-                
-                // For the first few attempts, make it easier to catch
-                if (noHoverCount <= 3) {
-                    randomX = Math.random() * (maxX * 0.5);
-                    randomY = Math.random() * (maxY * 0.5);
-                } else {
-                    // Make it progressively harder
-                    randomX = Math.random() * maxX;
-                    randomY = Math.random() * maxY;
-                }
-                
-                // Ensure the button doesn't go off-screen on mobile
-                if (window.innerWidth < 600) {
-                    randomX = Math.min(randomX, window.innerWidth - buttonRect.width - 20);
-                    randomY = Math.min(randomY, window.innerHeight - buttonRect.height - 20);
-                }
-                
-                // Apply the new position
-                noBtn.style.position = 'absolute';
-                noBtn.style.left = `${randomX}px`;
-                noBtn.style.top = `${randomY}px`;
+                // Find a new non-overlapping position
+                const newPosition = findNonOverlappingPosition();
                 
                 // Add floating animation
                 noBtn.style.animation = `float 0.5s ease`;
                 
-                // Change button text occasionally
-                if (noHoverCount === 2) {
+                // Change button text occasionally (but less frequently)
+                if (noHoverCount === 3) {
                     noBtn.textContent = "Are you sure?";
-                } else if (noHoverCount === 4) {
-                    noBtn.textContent = "Think again!";
                 } else if (noHoverCount === 6) {
-                    noBtn.textContent = "No";
-                } else if (noHoverCount === 8) {
-                    noBtn.textContent = "No";
-                } else if (noHoverCount >= 10) {
-                    noBtn.textContent = "No";
+                    noBtn.textContent = "Think again!";
+                } else if (noHoverCount === 9) {
+                    noBtn.textContent = "Maybe?";
+                } else if (noHoverCount === 12) {
+                    noBtn.textContent = "Please?";
+                } else if (noHoverCount >= 15) {
+                    noBtn.textContent = "Say yes! ❤️";
                 }
                 
                 // Create a few hearts when button moves
@@ -326,9 +398,15 @@
             });
             
             // When No is clicked (in case they manage to catch it)
-            noBtn.addEventListener('click', function() {
+            noBtn.addEventListener('click', function(e) {
+                if (noBtn.disabled) return;
+                
+                e.preventDefault();
+                
                 if (noHoverCount < 5) {
                     response.textContent = "Oh no! Please reconsider... 🥺";
+                } else if (noHoverCount < 10) {
+                    response.textContent = "My heart is breaking... 💔";
                 } else {
                     response.textContent = "You're persistent! But my heart still hopes... ❤️";
                 }
@@ -336,6 +414,9 @@
                 
                 // Create sad hearts
                 createHearts(5, true);
+                
+                // Find another position for the No button (even when clicked)
+                const newPosition = findNonOverlappingPosition();
                 
                 // Reset after 3 seconds
                 setTimeout(() => {
